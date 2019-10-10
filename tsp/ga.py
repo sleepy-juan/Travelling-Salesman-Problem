@@ -2,27 +2,30 @@
 #
 # written by Juan Lee <juanlee@kaist.ac.kr>
 
-import sys, random
+import random
+
+def printIf(msg, cond):
+    if cond:
+        print("\033[33m" + msg + "\x1b[0m")
 
 ############################################################
 # CONSTANTS
 #
 
-CROSSOVER_STRATEGY = "cx" # my | cx | <else - no crossover> (default)
-SELECTION_STRATEGY = "elitism" # overselect (default) | elitism
+CROSSOVER_STRATEGY = "cx" # my | cx (default) | pmx | no
+SELECTION_STRATEGY = "overselect" # overselect (default) | elitism
 
 GENE_MAX_LENGTH = 100
-GENE_MUTATE_RATE = 0.2
+GENE_MUTATE_RATE = 0.05
 
 INITIALIZE_SAME_AS_EXISTING_RATE = 0.1
 INITIALIZE_MUTATE_ONCE_FROM_EXISTING_RATE = 0.2
 
-GENERATION = 10000
-POPULATION_SIZE = 150
+GENERATION = 100
+POPULATION_SIZE = 100
 
-OVERSELECT_RATE = 0.2
-ELITISM_RATE = 0.2
-
+OVERSELECT_RATE = 0.1
+ELITISM_RATE = 0.1
 
 ############################################################
 
@@ -116,12 +119,46 @@ def cxCrossOver(x1, x2):
 
     return (y1, y2)
 
+# pmxCrossOver
+def pmxCrossOver(p1,p2):
+    y1 = [-1] * len(p1)
+    y2 = [-1] * len(p2)
+
+    a = random.randint(1, len(p1) - 1)
+    b = random.randint(a, len(p1))
+
+    for i in range(a, b):
+        y1[i] = p2[i]
+        y2[i] = p1[i]
+
+    for i in (list(range(a)) + list(range(b, len(p1)))):
+        if p1[i] in y1:
+            t = p2[i]
+            while (t not in p1[a:b]) or (t in y1):
+                t = p2[p1.index(t)]
+            y1[i] = t
+        else:
+            y1[i] = p1[i]
+        
+    for i in (list(range(a)) + list(range(b, len(p1)))):
+        if p2[i] in y2:
+            t = p1[i]
+            while (t not in p2[a:b]) or (t in y2):
+                t = p1[p2.index(t)]
+            y2[i] = t
+        else:
+            y2[i] = p2[i]
+            
+    return y1, y2
+
 # crossOver
 def crossOver(p1, p2):
     if CROSSOVER_STRATEGY == "my":
         return myCrossOver(p1, p2)
     elif CROSSOVER_STRATEGY == "cx":
         return cxCrossOver(p1, p2)
+    elif CROSSOVER_STRATEGY == "pmx":
+        return pmxCrossOver(p1, p2)
     return (p1, p2)
 
 # overselect: nodes, population, r -> population, dist, path
@@ -213,7 +250,7 @@ def elitism(nodes, population):
 def select(nodes, population):
     if SELECTION_STRATEGY == "elitism":
         return elitism(nodes, population)
-    return overselect(nodes, population, OVERSELECT_RATE)
+    return overselect(nodes, population)
 
 # selectFromPopulation: nodes, paths, n -> paths
 # - select n top paths from population
@@ -253,12 +290,58 @@ def initializeWithRandom(nodes, n):
         population.append(createRandom(nodes))
     return population
 
+argument = {}
+
+def _initArgument(args):
+    global POPULATION_SIZE
+    global OVERSELECT_RATE
+    global ELITISM_RATE
+    global GENERATION
+    global CROSSOVER_STRATEGY
+    global SELECTION_STRATEGY
+    global GENE_MUTATE_RATE
+    global GENE_MAX_LENGTH
+    global INITIALIZE_MUTATE_ONCE_FROM_EXISTING_RATE
+    global INITIALIZE_SAME_AS_EXISTING_RATE
+
+    if "-p" in args:
+        POPULATION_SIZE = int(args["-p"])
+    if "-w" in args:
+        OVERSELECT_RATE = float(args["-w"])
+        ELITISM_RATE = float(args["-w"])
+    if "-f" in args:
+        GENERATION = int(args["-f"])
+    if "-x" in args:
+        CROSSOVER_STRATEGY = args["-x"]
+    if "-s" in args:
+        SELECTION_STRATEGY = args["-s"]
+    if "-m" in args:
+        GENE_MUTATE_RATE = float(args["-m"])
+    if "-gl" in args:
+        GENE_MAX_LENGTH = int(args["-gl"])
+    if "-ie" in args:
+        INITIALIZE_SAME_AS_EXISTING_RATE = float(args["-ie"])
+    if "-im" in args:
+        INITIALIZE_MUTATE_ONCE_FROM_EXISTING_RATE = float(args["-im"])
+
 # Genetic Algorithm Main
-def ga():
-    nodes = parse(sys.argv[1])
+def ga(args = {"-l": True}):
+    global argument
+    argument = args
+
+    _initArgument(argument)
+
+    printIf("Genetic Algorithm Starts", argument["-l"])
+
+    nodes = parse(args["tspfile"])
 
     # initialize
-    population = initializeFromExisting("ga.csv", nodes, POPULATION_SIZE)
+    try:
+        population = initializeFromExisting("solution.csv", nodes, POPULATION_SIZE)
+    except:
+        population = initializeWithRandom(nodes, POPULATION_SIZE)
+    
+    printIf("Initializing Done", argument["-l"])
 
     # generations
     m = 99999999999999
@@ -267,12 +350,11 @@ def ga():
 
         if m > mDist:
             m = mDist
-            print("- [%s] %f" % (str(i).zfill(6), mDist))
-            saveToFile("ga.csv", mPath)
-        elif m < mDist:
-            print("+", end="", flush=True)
-        else:
-            print(".", end="", flush=True)
+            saveToFile("solution.csv", mPath)
+        
+        printIf("[%s] %f" % (str(i).zfill(6), mDist), argument["-l"])
+    
+    print(m)
 
 if __name__ == '__main__':
     ga()

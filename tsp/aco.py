@@ -4,20 +4,26 @@
 
 import sys, random
 
+def printIf(msg, cond):
+    if cond:
+        print("\033[33m" + msg + "\x1b[0m")
+
 ##################################################
 # Constants
 #
 INITIAL_PHEROMONE = 1
 
-WEIGHT_PHEROMONE = 1
-WEIGHT_LENGTH = 1
+WEIGHT_PHEROMONE = 0.5
+WEIGHT_LENGTH = 0.5
 
-ESTIMATED_SHORTEST_TOUR = 3000
+ESTIMATED_SHORTEST_TOUR = 1000000
 
 EVAPORATION_RATE = 0.1
 
 ANT_NUMBER = 10
-GENERATION = 10000
+GENERATION = 100
+
+EXAMINATION_STRATEGY = "mst" # tester | mst
 
 ##################################################
 # File Utilities
@@ -90,6 +96,22 @@ class Anthill:
             for j in range(i+1, self.dimension):
                 self.pheromone[(i, j)] *= (1 - EVAPORATION_RATE)
                 self.pheromone[(j, i)] *= (1 - EVAPORATION_RATE)
+    
+    def convertSpanningDS(self, nodes):
+        n = {}
+        for node in nodes:
+            n[node[0]] = {
+                "id": node[0],
+                "x": node[1],
+                "y": node[2]
+            }
+        
+        l = []
+        for i in range(self.dimension):
+            for j in range(i+1, self.dimension):
+                l.append((i+1, j+1, self.pheromone[(i, j)]))
+        
+        return n, l
 
 ##################################################
 # Ant
@@ -175,8 +197,45 @@ class Ant:
             total += ((n1[1] - n2[1])**2 + (n1[2] - n2[2])**2)**0.5
         return total
 
+argument = {}
+
+def _initArgument(args):
+    global ANT_NUMBER
+    global WEIGHT_PHEROMONE
+    global WEIGHT_LENGTH
+    global GENERATION
+    global INITIAL_PHEROMONE
+    global ESTIMATED_SHORTEST_TOUR
+    global EVAPORATION_RATE
+    global EXAMINATION_STRATEGY
+    
+    if "-p" in args:
+        ANT_NUMBER = int(args["-p"])
+    if "-w" in args:
+        WEIGHT_PHEROMONE = float(args["-w"])
+        WEIGHT_LENGTH = 1 - WEIGHT_PHEROMONE
+    if "-f" in args:
+        GENERATION = int(args["-f"])
+    if "-i" in args:
+        INITIAL_PHEROMONE = float(args["-i"])
+    if "-e" in args:
+        ESTIMATED_SHORTEST_TOUR = float(args["-e"])
+    if "-r" in args:
+        EVAPORATION_RATE = float(args["-r"])
+    if "-x" in args:
+        EXAMINATION_STRATEGY = args["-x"]
+
+from mst import spanning
+
 # Ant Colony Optimisation Main
-def aco():
+def aco(args = {"-l": True}):
+    global argument
+    argument = args
+
+    _initArgument(argument)
+
+    printIf("Ant Colony Optimisation Starts", args["-l"])
+
     nodes = parse(sys.argv[1])
 
     anthill = Anthill(nodes)
@@ -184,6 +243,8 @@ def aco():
 
     for ant in ants:
         ant.begin()
+
+    printIf("Initializing Done", args["-l"])
     
     for gen in range(GENERATION):
         while not ants[0].end():
@@ -193,11 +254,28 @@ def aco():
         for ant in ants:
             ant.begin()
         
+        if args["-l"]:
+            tester = Ant(anthill, "tester", True) # tester
+            tester.begin()
+            while not tester.end():
+                tester.turn()
+            printIf("[%s] %f" % (str(gen).zfill(6), tester.routeDistance(nodes)), args["-l"])    
+    
+    if EXAMINATION_STRATEGY == "tester":
         tester = Ant(anthill, "tester", True) # tester
         tester.begin()
         while not tester.end():
             tester.turn()
-        print("[%s]" % str(gen).zfill(6), tester.routeDistance(nodes))    
+        saveToFile("solution.csv", tester.route)
+        print(tester.routeDistance(nodes))
+    else:
+        n, l = anthill.convertSpanningDS(nodes)
+        path = spanning(None, l, n)
+        saveToFile("solution.csv", path)
+
+        tester = Ant(anthill, "tester", True) # tester
+        tester.route = path
+        print(tester.routeDistance(nodes))      
 
 if __name__ == '__main__':
     aco()

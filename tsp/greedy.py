@@ -3,7 +3,11 @@
 #
 # Writtenn by Juan Lee (juanlee@kaist.ac.kr)
 
-import sys, time
+import sys, time, random
+
+def printIf(msg, cond):
+    if cond:
+        print("\033[33m" + msg + "\x1b[0m")
 
 ##################################################
 # Node Utilities
@@ -84,7 +88,7 @@ def loadFromFile(filename):
     
     return nodes
 
-def saveToFile(path, filename = 'spanning.csv'):
+def saveToFile(path, filename = 'solution.csv'):
     with open(filename, "w") as f:
         for p in path:
             f.write("%d\n" % p)
@@ -92,87 +96,39 @@ def saveToFile(path, filename = 'spanning.csv'):
 ##################################################
 # TSP Utils
 #
-
-def spanning(table, edges, nodes):
-    edges.sort(key = lambda node: node[2]) # sort by distance
-    vertice = [{
-        "group": -1,
-        "id": i,
-        "neighbors": []
-    } for i in range(len(nodes.keys()) + 1)]
-    nEst = 0
-    groupIdToAssign = 0
-
-    # from the shortest
-    for edge in edges:
-        x, y, dist = edge
-
-        vx = vertice[x]
-        vy = vertice[y]
-
-        # node is already connected
-        if len(vx["neighbors"]) == 2 or len(vy["neighbors"]) == 2:
-            continue
-        # nodes are same group; it makes cycle
-        if vx["group"] == vy["group"] and vx["group"] != -1:
-            continue
+def greedy_from(n, nodes):
+    # 51, 1111492.9231858053 # 1 to 62
+    path = [n]
+    toVisit = list(nodes.keys())
+    toVisit.remove(n)
+    while len(toVisit) > 0:
+        m = 999999999
+        mIdx = -1
+        for target in toVisit:
+            dist = distanceBtw(nodes[target], nodes[path[-1]])
+            if dist < m:
+                m = dist
+                mIdx = target
         
-        vx["neighbors"].append(y)
-        vy["neighbors"].append(x)
-
-        # group rearranging
-        if vx["group"] == vy["group"]:    # only if group == -1
-            vx["group"] = groupIdToAssign
-            vy["group"] = groupIdToAssign
-            groupIdToAssign += 1
-        elif vx["group"] == -1: # only vx is solo
-            vx["group"] = vy["group"]
-        elif vy["group"] == -1:
-            vy["group"] = vx["group"]
-        else:   # both nodes has own group
-            xg = vx["group"]
-            yg = vy["group"]
-            for vertex in vertice:
-                if vertex["group"] == yg:
-                    vertex["group"] = xg
-        
-        nEst += 1
-        if nEst == len(nodes.keys()):
-            break
-
-    single = []
-    for vertex in vertice:
-        if len(vertex["neighbors"]) < 2 and vertex["id"] != 0:
-            single.append(vertex["id"])
-
-    vertice[single[0]]["neighbors"].append(single[1])
-    vertice[single[1]]["neighbors"].append(single[0])
-    
-    result = [1]
-    while len(result) < len(nodes.keys()):
-        current = result[-1]
-        neighbors = vertice[current]["neighbors"]
-        if neighbors[0] in result:
-            result.append(neighbors[1])
-        else:
-            result.append(neighbors[0])
-    
-    return result
+        toVisit.remove(mIdx)
+        path.append(mIdx)
+    return path
 
 ##################################################
 # Main
 #
 
-def solve(nodes):
-    print("start!")
-    table, edges = distanceOfEdges(nodes)
-    print("distance calculation done!")
-    return spanning(table, edges, nodes)
+def solve(nodes, args):
+    if "-i" in args:
+        return greedy_from(int(args["-i"]), nodes)
+    else:
+        return greedy_from(random.randint(1, len(nodes)), nodes)
 
-def main():
+def greedy(args = {"-l": True}):
+    printIf("Greedy Algorithm Starts", args["-l"])
     tsp_file = sys.argv[1]
     nodes = loadFromFile(tsp_file)
-    path = solve(nodes)
+    path = solve(nodes, args)
     dist = distance(path, nodes)
     
     saveToFile(path)
@@ -180,7 +136,7 @@ def main():
     print(dist)
 
 if __name__ == '__main__':
-    main()
+    greedy()
 
 
 ####
